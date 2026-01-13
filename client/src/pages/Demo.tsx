@@ -17,21 +17,16 @@ export default function Demo() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
-  const [surahNumber] = useState(1);
-  const [startVerse] = useState(1);
-  const [endVerse] = useState(7);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   const startRecording = async () => {
     try {
-      // التحقق من دعم MediaRecorder
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         toast.error("متصفحك لا يدعم التسجيل المباشر. استخدم متصفحاً حديثاً.");
         return;
       }
 
-      // طلب إذن الميكروفون
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -40,7 +35,6 @@ export default function Demo() {
         }
       });
 
-      // التحقق من دعم MediaRecorder
       if (typeof MediaRecorder === "undefined") {
         toast.error("متصفحك لا يدعم التسجيل الصوتي");
         stream.getTracks().forEach((track) => track.stop());
@@ -104,75 +98,85 @@ export default function Demo() {
       return;
     }
 
+    const maxSize = 50 * 1024 * 1024;
+    if (audioBlob.size > maxSize) {
+      toast.error(`حجم الملف كبير جداً (${(audioBlob.size / 1024 / 1024).toFixed(2)} MB). الحد الأقصى 50 MB`);
+      return;
+    }
+
     setIsAnalyzing(true);
     toast.loading("جاري تحليل التلاوة...");
     
     try {
-      // تحويل البلوب إلى Base64
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64Audio = (reader.result as string).split(',')[1];
-        
-        // بناء FormData للرفع
-        const formData = new FormData();
-        formData.append('file', audioBlob, 'audio.webm');
-        
-        try {
-          // استدعاء API لتحويل الصوت
-          const transcriptionResponse = await fetch('/api/transcribe', {
-            method: 'POST',
-            body: formData,
-          });
-          
-          if (!transcriptionResponse.ok) {
-            throw new Error('فشل تحويل الصوت');
-          }
-          
-          const transcriptionData = await transcriptionResponse.json();
-          const transcribedText = transcriptionData.text || '';
-          
-          // استدعاء LLM للتحليل
-          const analysisResponse = await fetch('/api/analyze-recitation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              transcribedText,
-              surahName: 'الفاتحة',
-              surahNumber: 1,
-              startVerse: 1,
-              endVerse: 7,
-            }),
-          });
-          
-          if (!analysisResponse.ok) {
-            throw new Error('فشل التحليل');
-          }
-          
-          const analysisData = await analysisResponse.json();
-          
-          setAnalysisResults({
-            surah: 'سورة الفاتحة',
-            ayah: 'الآية 1-7',
-            duration: `${(audioBlob.size / 1024 / 1024).toFixed(2)} MB`,
-            transcribedText,
-            issues: analysisData.issues || [],
-            score: analysisData.score || 75,
-            feedback: analysisData.feedback || 'تم التحليل بنجاح',
-          });
-          
-          toast.success('تم تحليل التلاوة بنجاح!');
-        } catch (error) {
-          console.error('خطأ في التحليل:', error);
-          toast.error('حدث خطأ في التحليل');
-        } finally {
-          setIsAnalyzing(false);
-        }
-      };
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.webm');
       
-      reader.readAsDataURL(audioBlob);
-    } catch (error) {
-      console.error('الخطأ:', error);
-      toast.error('حدث خطأ في معالجة الملف');
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60000);
+      
+      try {
+        const transcriptionResponse = await fetch('/api/transcribe', {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeout);
+        
+        if (!transcriptionResponse.ok) {
+          const errorData = await transcriptionResponse.json().catch(() => ({}));
+          throw new Error(errorData.error || `فشل تحويل الصوت (${transcriptionResponse.status})`);
+        }
+        
+        const transcriptionData = await transcriptionResponse.json();
+        const transcribedText = transcriptionData.text || '';
+        
+        if (!transcribedText) {
+          throw new Error('لم يتم التعرف على أي نص من الملف الصوتي');
+        }
+        
+        const analysisResponse = await fetch('/api/analyze-recitation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcribedText,
+            surahName: 'الفاتحة',
+            surahNumber: 1,
+            startVerse: 1,
+            endVerse: 7,
+          }),
+        });
+        
+        if (!analysisResponse.ok) {
+          const errorData = await analysisResponse.json().catch(() => ({}));
+          throw new Error(errorData.error || 'فشل التحليل');
+        }
+        
+        const analysisData = await analysisResponse.json();
+        
+        setAnalysisResults({
+          surah: 'سورة الفاتحة',
+          ayah: 'الآية 1-7',
+          duration: `${(audioBlob.size / 1024 / 1024).toFixed(2)} MB`,
+          transcribedText,
+          issues: analysisData.issues || [],
+          score: analysisData.score || 75,
+          feedback: analysisData.feedback || 'تم التحليل بنجاح',
+        });
+        
+        toast.success('تم تحليل التلاوة بنجاح!');
+      } catch (fetchError: any) {
+        clearTimeout(timeout);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('انقطع الاتصال أو استغرقت العملية وقتاً طويلاً (أكثر من 60 ثانية)');
+        }
+        throw fetchError;
+      }
+    } catch (error: any) {
+      console.error('خطأ في التحليل:', error);
+      const errorMsg = error.message || 'حدث خطأ في التحليل';
+      toast.error(errorMsg);
+    } finally {
       setIsAnalyzing(false);
     }
   };

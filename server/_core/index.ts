@@ -37,7 +37,8 @@ async function startServer() {
   registerOAuthRoutes(app);
   
   // Import API handlers
-  const { handleTranscribe, handleAnalyzeRecitation } = await import("../api-transcribe");
+  const { handleTranscribe } = await import("../audio-handler");
+  const { handleAnalyzeRecitation } = await import("../api-transcribe");
   
   // API endpoints for transcription and analysis
   app.post("/api/transcribe", async (req, res) => {
