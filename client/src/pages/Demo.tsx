@@ -7,9 +7,7 @@ import {
   Play,
   Download,
   Zap,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
+  ArrowRight,
 } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -27,25 +25,69 @@ export default function Demo() {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // التحقق من دعم MediaRecorder
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast.error("متصفحك لا يدعم التسجيل المباشر. استخدم متصفحاً حديثاً.");
+        return;
+      }
+
+      // طلب إذن الميكروفون
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
+
+      // التحقق من دعم MediaRecorder
+      if (typeof MediaRecorder === "undefined") {
+        toast.error("متصفحك لا يدعم التسجيل الصوتي");
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onerror = (event) => {
+        console.error("خطأ في التسجيل:", event.error);
+        toast.error("حدث خطأ في التسجيل: " + event.error);
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        setAudioBlob(blob);
+        if (audioChunksRef.current.length > 0) {
+          const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          setAudioBlob(blob);
+          toast.success("تم تسجيل التلاوة بنجاح");
+        } else {
+          toast.error("لم يتم تسجيل أي صوت");
+        }
         stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorder.start();
       setIsRecording(true);
-    } catch (error) {
-      toast.error("لا يمكن الوصول إلى الميكروفون");
+      toast.success("جاري التسجيل...");
+    } catch (error: any) {
+      console.error("خطأ في التسجيل:", error);
+      
+      if (error.name === "NotAllowedError") {
+        toast.error("يرجى السماح بالوصول إلى الميكروفون");
+      } else if (error.name === "NotFoundError") {
+        toast.error("لم يتم العثور على ميكروفون");
+      } else if (error.name === "NotSupportedError") {
+        toast.error("نوع الميكروفون غير مدعوم");
+      } else {
+        toast.error("لا يمكن الوصول إلى الميكروفون: " + (error.message || error.name));
+      }
     }
   };
 
@@ -158,244 +200,177 @@ export default function Demo() {
               <h1 className="text-xl font-bold">الماهر</h1>
             </div>
           </Link>
-          <Button
-            onClick={() => window.location.href = getLoginUrl()}
-            className="gradient-primary text-primary-foreground font-bold"
-          >
-            تسجيل الدخول
-          </Button>
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="gap-2">
+              العودة للرئيسية
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
         </div>
       </header>
 
-      {/* القسم الرئيسي */}
-      <section className="py-20 md:py-32 relative">
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-accent/20 rounded-full blur-3xl" />
-        </div>
-
-        <div className="container relative">
-          <div className="max-w-3xl mx-auto text-center space-y-8">
-            <div className="inline-flex items-center gap-2 glass-card px-4 py-2 text-sm">
-              <span className="online-indicator" />
-              <span className="text-muted-foreground">جرب المنصة الآن</span>
-            </div>
-
-            <h1 className="text-4xl md:text-6xl font-bold leading-tight">
-              <span className="gradient-primary-text">اختبر تلاوتك</span>
-              <br />
-              بدون تسجيل
-            </h1>
-
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              سجل تلاوتك الآن واحصل على تحليل فوري من الذكاء الاصطناعي
-              لمعرفة نقاط القوة والضعف في تلاوتك
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* منطقة التسجيل */}
-      <section className="py-20">
-        <div className="container max-w-2xl">
-          <div className="glass-card p-8 space-y-8">
-            {/* اختيار السورة والآية */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">اختر السورة</label>
-                <select className="w-full glass-card px-4 py-3 bg-background border border-border/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-                  <option>سورة الفاتحة</option>
-                  <option>سورة البقرة</option>
-                  <option>سورة آل عمران</option>
-                  <option>سورة النساء</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">الآيات</label>
-                <input
-                  type="text"
-                  placeholder="مثال: 1-7"
-                  className="w-full glass-card px-4 py-3 bg-background border border-border/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            </div>
-
-            {/* منطقة التسجيل */}
+      {/* المحتوى الرئيسي */}
+      <main className="container py-12">
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* قسم التسجيل */}
+          <div className="glass rounded-2xl p-8 border border-border/50">
+            <h2 className="text-2xl font-bold mb-6 text-center">جرب التسجيل الآن</h2>
+            
             <div className="space-y-6">
-              <div className="flex flex-col items-center gap-6">
-                <div className="w-32 h-32 gradient-primary rounded-full flex items-center justify-center glow-primary">
-                  <Mic2 className="w-16 h-16 text-primary-foreground" />
-                </div>
-
-                {isRecording && (
-                  <div className="flex items-center gap-2 text-primary">
-                    <span className="inline-block w-2 h-2 bg-primary rounded-full animate-pulse" />
-                    <span className="font-semibold">جاري التسجيل...</span>
-                  </div>
-                )}
-
-                <div className="flex gap-4">
-                  {!isRecording ? (
-                    <Button
-                      onClick={startRecording}
-                      size="lg"
-                      className="gradient-primary text-primary-foreground font-bold gap-2 glow-primary"
-                    >
-                      <Mic2 className="w-5 h-5" />
-                      ابدأ التسجيل
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={stopRecording}
-                      size="lg"
-                      className="bg-red-500 hover:bg-red-600 text-white font-bold gap-2"
-                    >
-                      <Square className="w-5 h-5" />
-                      إيقاف التسجيل
-                    </Button>
-                  )}
+              {/* حالة التسجيل */}
+              <div className="flex justify-center">
+                <div className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
+                  isRecording 
+                    ? "gradient-primary glow-primary animate-pulse" 
+                    : "bg-secondary"
+                }`}>
+                  <Mic2 className="w-10 h-10 text-primary-foreground" />
                 </div>
               </div>
 
-              {/* تشغيل التسجيل */}
-              {audioBlob && (
-                <div className="space-y-4 pt-6 border-t border-border/50">
-                  <div className="flex items-center gap-4">
-                    <audio
-                      controls
-                      className="flex-1"
-                      src={URL.createObjectURL(audioBlob)}
-                    />
-                    <Button
-                      onClick={downloadRecording}
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                    >
-                      <Download className="w-4 h-4" />
-                      تحميل
-                    </Button>
-                  </div>
+              {/* زر التسجيل/الإيقاف */}
+              <div className="flex gap-4 justify-center">
+                {!isRecording ? (
+                  <Button 
+                    onClick={startRecording}
+                    className="gap-2 gradient-primary glow-primary"
+                    size="lg"
+                  >
+                    <Mic2 className="w-5 h-5" />
+                    ابدأ التسجيل
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={stopRecording}
+                    variant="destructive"
+                    className="gap-2"
+                    size="lg"
+                  >
+                    <Square className="w-5 h-5" />
+                    إيقاف التسجيل
+                  </Button>
+                )}
+              </div>
 
-                  <Button
+              {/* الأزرار الإضافية */}
+              {audioBlob && (
+                <div className="flex gap-4 justify-center flex-wrap">
+                  <Button 
                     onClick={analyzeRecitation}
                     disabled={isAnalyzing}
-                    className="w-full gradient-primary text-primary-foreground font-bold gap-2 glow-primary"
+                    className="gap-2 gradient-primary"
                   >
-                    {isAnalyzing ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        جاري التحليل...
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-5 h-5" />
-                        حلل التلاوة
-                      </>
-                    )}
+                    <Play className="w-4 h-4" />
+                    {isAnalyzing ? "جاري التحليل..." : "تحليل التلاوة"}
+                  </Button>
+                  <Button 
+                    onClick={downloadRecording}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    تحميل
                   </Button>
                 </div>
               )}
+
+              {/* رسالة التعليمات */}
+              <div className="bg-secondary/50 rounded-lg p-4 text-sm text-center text-muted-foreground">
+                <p>سجل تلاوتك لسورة الفاتحة ثم اضغط على "تحليل التلاوة" للحصول على تقييم فوري</p>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* نتائج التحليل */}
-      {analysisResults && (
-        <section className="py-20">
-          <div className="container max-w-2xl">
-            <div className="space-y-8">
-              {/* ملخص النتائج */}
-              <div className="glass-card p-8 space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold">نتائج التحليل</h2>
-                  <div className="text-right">
-                    <div className="text-4xl font-bold gradient-primary-text">
-                      {analysisResults.score}%
-                    </div>
-                    <p className="text-sm text-muted-foreground">درجة التلاوة</p>
+          {/* قسم النتائج */}
+          <div className="glass rounded-2xl p-8 border border-border/50">
+            <h2 className="text-2xl font-bold mb-6 text-center">نتائج التحليل</h2>
+            
+            {analysisResults ? (
+              <div className="space-y-6">
+                {/* الدرجة */}
+                <div className="text-center">
+                  <div className="text-5xl font-bold gradient-text mb-2">
+                    {analysisResults.score}
                   </div>
+                  <p className="text-muted-foreground">من 100</p>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="glass-card p-4 text-center space-y-2">
-                    <p className="text-sm text-muted-foreground">السورة</p>
-                    <p className="font-bold">{analysisResults.surah}</p>
-                  </div>
-                  <div className="glass-card p-4 text-center space-y-2">
-                    <p className="text-sm text-muted-foreground">الآيات</p>
-                    <p className="font-bold">{analysisResults.ayah}</p>
-                  </div>
-                  <div className="glass-card p-4 text-center space-y-2">
-                    <p className="text-sm text-muted-foreground">المدة</p>
-                    <p className="font-bold">{analysisResults.duration}</p>
-                  </div>
-                </div>
-
+                {/* المعلومات */}
                 <div className="space-y-3">
-                  <h3 className="font-bold">الملاحظات</h3>
-                  {analysisResults.issues.map((issue: any, index: number) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-3 p-3 rounded-lg bg-background/50"
-                    >
-                      {issue.type === "error" && (
-                        <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
-                      )}
-                      {issue.type === "warning" && (
-                        <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                      )}
-                      {issue.type === "success" && (
-                        <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                      )}
-                      <div className="flex-1">
-                        <p className="text-sm">{issue.text}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          الوقت: {issue.time}
-                        </p>
-                      </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">السورة:</span>
+                    <span className="font-semibold">{analysisResults.surah}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">الآيات:</span>
+                    <span className="font-semibold">{analysisResults.ayah}</span>
+                  </div>
+                </div>
+
+                {/* التقييم */}
+                <div className="bg-secondary/50 rounded-lg p-4">
+                  <h3 className="font-semibold mb-2">التقييم:</h3>
+                  <p className="text-sm text-muted-foreground">{analysisResults.feedback}</p>
+                </div>
+
+                {/* الملاحظات */}
+                {analysisResults.issues && analysisResults.issues.length > 0 && (
+                  <div className="bg-secondary/50 rounded-lg p-4">
+                    <h3 className="font-semibold mb-3">الملاحظات:</h3>
+                    <div className="space-y-2">
+                      {analysisResults.issues.map((issue: any, idx: number) => (
+                        <div key={idx} className="flex gap-2 text-sm">
+                          <span className={`font-semibold ${
+                            issue.type === 'error' ? 'text-red-500' :
+                            issue.type === 'warning' ? 'text-yellow-500' :
+                            'text-green-500'
+                          }`}>
+                            {issue.type === 'error' ? '❌' :
+                             issue.type === 'warning' ? '⚠️' :
+                             '✅'}
+                          </span>
+                          <span>{issue.text}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
 
-                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                  <p className="text-sm leading-relaxed">
-                    <span className="font-bold">التقييم: </span>
-                    {analysisResults.feedback}
-                  </p>
-                </div>
-              </div>
-
-              {/* الدعوة للتسجيل */}
-              <div className="glass-card p-8 text-center space-y-6">
-                <h3 className="text-2xl font-bold">
-                  هل أعجبتك النتائج؟
-                </h3>
-                <p className="text-muted-foreground">
-                  سجل الآن للحصول على تصحيحات مفصلة من معلمين متخصصين
-                  وتتبع تقدمك على مدار الوقت
-                </p>
-                <Button
-                  onClick={() => window.location.href = getLoginUrl()}
-                  size="lg"
-                  className="gradient-primary text-primary-foreground font-bold gap-2 glow-primary"
+                {/* زر التسجيل مرة أخرى */}
+                <Button 
+                  onClick={() => {
+                    setAudioBlob(null);
+                    setAnalysisResults(null);
+                  }}
+                  variant="outline"
+                  className="w-full"
                 >
-                  <Mic2 className="w-5 h-5" />
-                  سجل الآن مجاناً
+                  تسجيل جديد
                 </Button>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-96 text-center">
+                <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
+                  <Mic2 className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground">
+                  سجل تلاوة وحللها للحصول على النتائج
+                </p>
+              </div>
+            )}
           </div>
-        </section>
-      )}
-
-      {/* الفوتر */}
-      <footer className="py-8 border-t border-border/50">
-        <div className="container text-center text-muted-foreground">
-          <p>© 2025 منصة الماهر - الحوكمة القرآنية التشاركية</p>
         </div>
-      </footer>
+
+        {/* زر التسجيل الآن */}
+        <div className="mt-12 text-center">
+          <Link href={getLoginUrl()}>
+            <Button size="lg" className="gap-2 gradient-primary glow-primary">
+              سجل الآن واستمتع بجميع المميزات
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+          </Link>
+        </div>
+      </main>
     </div>
   );
 }
