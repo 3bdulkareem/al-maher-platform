@@ -96,21 +96,27 @@ export default function Home() {
                   </Button>
                 </Link>
               ) : (
-                <Button 
-                  size="lg" 
-                  onClick={() => window.location.href = getLoginUrl()}
-                  className="gradient-primary text-primary-foreground font-bold gap-2 glow-primary"
-                >
-                  <Mic2 className="w-5 h-5" />
-                  ابدأ رحلتك
-                </Button>
+                <>
+                  <Link href="/demo">
+                    <Button 
+                      size="lg" 
+                      className="gradient-primary text-primary-foreground font-bold gap-2 glow-primary"
+                    >
+                      <Mic2 className="w-5 h-5" />
+                      جرب الآن مجاناً
+                    </Button>
+                  </Link>
+                  <Button 
+                    size="lg" 
+                    onClick={() => window.location.href = getLoginUrl()}
+                    variant="outline"
+                    className="gap-2 glass-hover"
+                  >
+                    <BookOpen className="w-5 h-5" />
+                    تسجيل الدخول
+                  </Button>
+                </>
               )}
-              <Link href="/about">
-                <Button size="lg" variant="outline" className="gap-2 glass-hover">
-                  <BookOpen className="w-5 h-5" />
-                  تعرف على المنصة
-                </Button>
-              </Link>
             </div>
           </div>
         </div>

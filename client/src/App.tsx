@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import About from "./pages/About";
 import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
+import Demo from "./pages/Demo";
 import Dashboard from "./pages/Dashboard";
 import RecordRecitation from "./pages/RecordRecitation";
 import PeerReview from "./pages/PeerReview";
@@ -62,6 +63,7 @@ function Router() {
       <Route path="/about" component={About} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/contact" component={Contact} />
+      <Route path="/demo" component={Demo} />
       <Route path="/dashboard">
         {() => <ProtectedRoute component={Dashboard} />}
       </Route>
