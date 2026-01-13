@@ -35,6 +35,17 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  
+  // Import API handlers
+  const { handleTranscribe, handleAnalyzeRecitation } = await import("../api-transcribe");
+  
+  // API endpoints for transcription and analysis
+  app.post("/api/transcribe", async (req, res) => {
+    await handleTranscribe(req, res);
+  });
+  
+  app.post("/api/analyze-recitation", handleAnalyzeRecitation);
+  
   // tRPC API
   app.use(
     "/api/trpc",

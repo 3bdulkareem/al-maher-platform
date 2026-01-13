@@ -63,37 +63,76 @@ export default function Demo() {
     }
 
     setIsAnalyzing(true);
+    toast.loading("جاري تحليل التلاوة...");
     
-    // محاكاة التحليل
-    setTimeout(() => {
-      setAnalysisResults({
-        surah: "سورة الفاتحة",
-        ayah: "الآية 1-3",
-        duration: "45 ثانية",
-        issues: [
-          {
-            type: "error",
-            text: "تفخيم غير صحيح في كلمة (الرحمن)",
-            time: "0:15",
-          },
-          {
-            type: "warning",
-            text: "توقف قصير في الوصل بين الآيات",
-            time: "0:32",
-          },
-          {
-            type: "success",
-            text: "تجويد ممتاز في كلمة (الحمد)",
-            time: "0:08",
-          },
-        ],
-        score: 78,
-        feedback:
-          "تلاوة جيدة جداً! يحتاج فقط إلى تصحيح التفخيم والترقيق وتحسين التوقفات.",
-      });
+    try {
+      // تحويل البلوب إلى Base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64Audio = (reader.result as string).split(',')[1];
+        
+        // بناء FormData للرفع
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'audio.webm');
+        
+        try {
+          // استدعاء API لتحويل الصوت
+          const transcriptionResponse = await fetch('/api/transcribe', {
+            method: 'POST',
+            body: formData,
+          });
+          
+          if (!transcriptionResponse.ok) {
+            throw new Error('فشل تحويل الصوت');
+          }
+          
+          const transcriptionData = await transcriptionResponse.json();
+          const transcribedText = transcriptionData.text || '';
+          
+          // استدعاء LLM للتحليل
+          const analysisResponse = await fetch('/api/analyze-recitation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              transcribedText,
+              surahName: 'الفاتحة',
+              surahNumber: 1,
+              startVerse: 1,
+              endVerse: 7,
+            }),
+          });
+          
+          if (!analysisResponse.ok) {
+            throw new Error('فشل التحليل');
+          }
+          
+          const analysisData = await analysisResponse.json();
+          
+          setAnalysisResults({
+            surah: 'سورة الفاتحة',
+            ayah: 'الآية 1-7',
+            duration: `${(audioBlob.size / 1024 / 1024).toFixed(2)} MB`,
+            transcribedText,
+            issues: analysisData.issues || [],
+            score: analysisData.score || 75,
+            feedback: analysisData.feedback || 'تم التحليل بنجاح',
+          });
+          
+          toast.success('تم تحليل التلاوة بنجاح!');
+        } catch (error) {
+          console.error('خطأ في التحليل:', error);
+          toast.error('حدث خطأ في التحليل');
+        } finally {
+          setIsAnalyzing(false);
+        }
+      };
+      
+      reader.readAsDataURL(audioBlob);
+    } catch (error) {
+      console.error('الخطأ:', error);
+      toast.error('حدث خطأ في معالجة الملف');
       setIsAnalyzing(false);
-      toast.success("تم تحليل التلاوة بنجاح!");
-    }, 2000);
+    }
   };
 
   const downloadRecording = () => {
