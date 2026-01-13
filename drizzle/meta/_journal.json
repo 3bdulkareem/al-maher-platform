@@ -15,6 +15,13 @@
       "when": 1768254433463,
       "tag": "0001_graceful_giant_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1768295150665,
+      "tag": "0002_lush_bedlam",
+      "breakpoints": true
     }
   ]
 }

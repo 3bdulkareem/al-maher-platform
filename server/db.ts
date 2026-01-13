@@ -5,7 +5,8 @@ import {
   recitations, InsertRecitation, Recitation,
   corrections, InsertCorrection, Correction,
   notifications, InsertNotification,
-  surahs, InsertSurah
+  surahs, InsertSurah,
+  demoRecitations, InsertDemoRecitation, DemoRecitation
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -512,4 +513,53 @@ export async function seedSurahs() {
   ];
   
   await db.insert(surahs).values(surahsData);
+}
+
+// ==================== التسجيلات التجريبية ====================
+
+export async function createDemoRecitation(data: InsertDemoRecitation) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(demoRecitations).values(data);
+  return result[0].insertId;
+}
+
+export async function getDemoRecitationsBySessionId(sessionId: string) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(demoRecitations)
+    .where(eq(demoRecitations.sessionId, sessionId))
+    .orderBy(desc(demoRecitations.createdAt));
+}
+
+export async function getDemoRecitationById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select()
+    .from(demoRecitations)
+    .where(eq(demoRecitations.id, id))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateDemoRecitation(id: number, data: Partial<InsertDemoRecitation>) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.update(demoRecitations)
+    .set(data)
+    .where(eq(demoRecitations.id, id));
+}
+
+export async function deleteDemoRecitation(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.delete(demoRecitations)
+    .where(eq(demoRecitations.id, id));
 }

@@ -143,6 +143,30 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
 
 /**
+ * جدول التسجيلات التجريبية - للمستخدمين بدون تسجيل دخول
+ */
+export const demoRecitations = mysqlTable("demoRecitations", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: varchar("sessionId", { length: 64 }).notNull(),
+  surahName: varchar("surahName", { length: 100 }).notNull(),
+  surahNumber: int("surahNumber").notNull(),
+  startVerse: int("startVerse").notNull(),
+  endVerse: int("endVerse").notNull(),
+  audioUrl: text("audioUrl").notNull(),
+  audioKey: varchar("audioKey", { length: 255 }).notNull(),
+  durationSeconds: int("durationSeconds"),
+  aiAnalysis: text("aiAnalysis"),
+  aiScore: decimal("aiScore", { precision: 5, scale: 2 }),
+  userEmail: varchar("userEmail", { length: 320 }),
+  userName: varchar("userName", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type DemoRecitation = typeof demoRecitations.$inferSelect;
+export type InsertDemoRecitation = typeof demoRecitations.$inferInsert;
+
+/**
  * جدول السور القرآنية (للمرجعية)
  */
 export const surahs = mysqlTable("surahs", {

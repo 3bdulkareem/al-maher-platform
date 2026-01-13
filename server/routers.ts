@@ -28,6 +28,10 @@ import {
   getAllSurahs,
   seedSurahs,
   getUserById,
+  createDemoRecitation,
+  getDemoRecitationsBySessionId,
+  getDemoRecitationById,
+  updateDemoRecitation,
 } from "./db";
 
 export const appRouter = router({
@@ -281,6 +285,53 @@ export const appRouter = router({
       await seedSurahs(); // التأكد من وجود البيانات
       return await getAllSurahs();
     }),
+  }),
+
+  // ==================== التسجيلات التجريبية ====================
+  demo: router({
+    saveDemoRecitation: publicProcedure
+      .input(z.object({
+        sessionId: z.string(),
+        surahName: z.string(),
+        surahNumber: z.number(),
+        startVerse: z.number(),
+        endVerse: z.number(),
+        audioUrl: z.string(),
+        audioKey: z.string(),
+        durationSeconds: z.number().optional(),
+        aiAnalysis: z.string().optional(),
+        aiScore: z.string().optional(),
+        userEmail: z.string().optional(),
+        userName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await createDemoRecitation(input);
+        return { success: true, id };
+      }),
+    
+    getDemoRecitations: publicProcedure
+      .input(z.object({ sessionId: z.string() }))
+      .query(async ({ input }) => {
+        return await getDemoRecitationsBySessionId(input.sessionId);
+      }),
+    
+    getDemoRecitation: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await getDemoRecitationById(input.id);
+      }),
+    
+    updateDemoRecitation: publicProcedure
+      .input(z.object({
+        id: z.number(),
+        aiAnalysis: z.string().optional(),
+        aiScore: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await updateDemoRecitation(id, data);
+        return { success: true };
+      }),
   }),
 });
 

@@ -19,6 +19,9 @@ export default function Demo() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
+  const [surahNumber] = useState(1);
+  const [startVerse] = useState(1);
+  const [endVerse] = useState(7);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -60,6 +63,7 @@ export default function Demo() {
     }
 
     setIsAnalyzing(true);
+    
     // محاكاة التحليل
     setTimeout(() => {
       setAnalysisResults({
