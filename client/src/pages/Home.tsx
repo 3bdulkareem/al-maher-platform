@@ -33,6 +33,15 @@ export default function Home() {
             <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">المميزات</a>
             <a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">كيف يعمل</a>
             <a href="#ranks" className="text-muted-foreground hover:text-foreground transition-colors">نظام الرتب</a>
+            <Link href="/about">
+              <a className="text-muted-foreground hover:text-foreground transition-colors">عن المنصة</a>
+            </Link>
+            <Link href="/pricing">
+              <a className="text-muted-foreground hover:text-foreground transition-colors">الأسعار</a>
+            </Link>
+            <Link href="/contact">
+              <a className="text-muted-foreground hover:text-foreground transition-colors">التواصل</a>
+            </Link>
           </nav>
           
           {isAuthenticated ? (
@@ -96,10 +105,12 @@ export default function Home() {
                   ابدأ رحلتك
                 </Button>
               )}
-              <Button size="lg" variant="outline" className="gap-2 glass-hover">
-                <BookOpen className="w-5 h-5" />
-                تعرف على المنصة
-              </Button>
+              <Link href="/about">
+                <Button size="lg" variant="outline" className="gap-2 glass-hover">
+                  <BookOpen className="w-5 h-5" />
+                  تعرف على المنصة
+                </Button>
+              </Link>
             </div>
           </div>
         </div>

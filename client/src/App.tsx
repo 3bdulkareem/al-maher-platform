@@ -5,10 +5,12 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import About from "./pages/About";
+import Pricing from "./pages/Pricing";
+import Contact from "./pages/Contact";
 import Dashboard from "./pages/Dashboard";
 import RecordRecitation from "./pages/RecordRecitation";
 import PeerReview from "./pages/PeerReview";
-import Profile from "./pages/Profile";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
@@ -57,6 +59,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/about" component={About} />
+      <Route path="/pricing" component={Pricing} />
+      <Route path="/contact" component={Contact} />
       <Route path="/dashboard">
         {() => <ProtectedRoute component={Dashboard} />}
       </Route>
@@ -65,9 +70,6 @@ function Router() {
       </Route>
       <Route path="/review">
         {() => <ProtectedRoute component={PeerReview} />}
-      </Route>
-      <Route path="/profile">
-        {() => <ProtectedRoute component={Profile} />}
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
