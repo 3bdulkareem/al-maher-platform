@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
 import {
@@ -8,373 +8,380 @@ import {
   Download,
   Zap,
   ArrowRight,
+  Upload,
+  AlertCircle,
 } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { AudioFileUpload } from "@/components/AudioFileUpload";
 
 export default function Demo() {
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
+  const [duration, setDuration] = useState(0);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+    };
+  }, []);
 
   const startRecording = async () => {
     try {
+      setRecordingError(null);
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        toast.error("متصفحك لا يدعم التسجيل المباشر. استخدم متصفحاً حديثاً.");
+        setRecordingError("متصفحك لا يدعم التسجيل المباشر. استخدم متصفحاً حديثاً أو حمّل ملفاً صوتياً بدلاً من ذلك.");
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-        }
+        },
       });
 
-      if (typeof MediaRecorder === "undefined") {
-        toast.error("متصفحك لا يدعم التسجيل الصوتي");
-        stream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
+      streamRef.current = stream;
       audioChunksRef.current = [];
+      setDuration(0);
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+      // محاولة استخدام MediaRecorder
+      if (typeof MediaRecorder !== "undefined") {
+        try {
+          const mediaRecorder = new MediaRecorder(stream);
+          mediaRecorderRef.current = mediaRecorder;
+
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              audioChunksRef.current.push(event.data);
+            }
+          };
+
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+            setAudioBlob(blob);
+          };
+
+          mediaRecorder.onerror = (event) => {
+            setRecordingError(`خطأ في التسجيل: ${event.error}`);
+          };
+
+          mediaRecorder.start();
+          setIsRecording(true);
+
+          // تحديث المدة
+          durationIntervalRef.current = setInterval(() => {
+            setDuration((prev) => prev + 1);
+          }, 1000);
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : "خطأ غير معروف";
+          setRecordingError(`فشل التسجيل: ${errorMsg}`);
+          stream.getTracks().forEach((track) => track.stop());
         }
-      };
-
-      mediaRecorder.onerror = (event) => {
-        console.error("خطأ في التسجيل:", event.error);
-        toast.error("حدث خطأ في التسجيل: " + event.error);
-      };
-
-      mediaRecorder.onstop = () => {
-        if (audioChunksRef.current.length > 0) {
-          const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-          setAudioBlob(blob);
-          toast.success("تم تسجيل التلاوة بنجاح");
-        } else {
-          toast.error("لم يتم تسجيل أي صوت");
-        }
-        stream.getTracks().forEach((track) => track.stop());
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      toast.success("جاري التسجيل...");
-    } catch (error: any) {
-      console.error("خطأ في التسجيل:", error);
-      
-      if (error.name === "NotAllowedError") {
-        toast.error("يرجى السماح بالوصول إلى الميكروفون");
-      } else if (error.name === "NotFoundError") {
-        toast.error("لم يتم العثور على ميكروفون");
-      } else if (error.name === "NotSupportedError") {
-        toast.error("نوع الميكروفون غير مدعوم");
       } else {
-        toast.error("لا يمكن الوصول إلى الميكروفون: " + (error.message || error.name));
+        setRecordingError("متصفحك لا يدعم التسجيل الصوتي");
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "فشل الوصول إلى الميكروفون";
+
+      if (errorMessage.includes("NotAllowedError") || errorMessage.includes("Permission denied")) {
+        setRecordingError("يرجى السماح بالوصول إلى الميكروفون");
+      } else if (errorMessage.includes("NotFoundError")) {
+        setRecordingError("لم يتم العثور على ميكروفون متصل");
+      } else if (errorMessage.includes("NotSupportedError")) {
+        setRecordingError("المتصفح الحالي لا يدعم تسجيل الصوت. يرجى استخدام متصفح حديث أو حمّل ملفاً صوتياً");
+      } else {
+        setRecordingError(errorMessage);
       }
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
     }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+
+    setIsRecording(false);
+  };
+
+  const handleFileSelected = (file: File) => {
+    setAudioBlob(file);
+    setRecordingError(null);
+    toast.success("تم تحميل الملف الصوتي بنجاح");
   };
 
   const analyzeRecitation = async () => {
     if (!audioBlob) {
-      toast.error("يرجى تسجيل تلاوة أولاً");
-      return;
-    }
-
-    const maxSize = 50 * 1024 * 1024;
-    if (audioBlob.size > maxSize) {
-      toast.error(`حجم الملف كبير جداً (${(audioBlob.size / 1024 / 1024).toFixed(2)} MB). الحد الأقصى 50 MB`);
+      toast.error("يرجى تسجيل أو تحميل ملف صوتي أولاً");
       return;
     }
 
     setIsAnalyzing(true);
-    toast.loading("جاري تحليل التلاوة...");
-    
+    setRecordingError(null);
+
     try {
       const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.webm');
-      
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 60000);
-      
-      try {
-        const transcriptionResponse = await fetch('/api/transcribe', {
-          method: 'POST',
-          body: formData,
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeout);
-        
-        if (!transcriptionResponse.ok) {
-          const errorData = await transcriptionResponse.json().catch(() => ({}));
-          throw new Error(errorData.error || `فشل تحويل الصوت (${transcriptionResponse.status})`);
-        }
-        
-        const transcriptionData = await transcriptionResponse.json();
-        const transcribedText = transcriptionData.text || '';
-        
-        if (!transcribedText) {
-          throw new Error('لم يتم التعرف على أي نص من الملف الصوتي');
-        }
-        
-        const analysisResponse = await fetch('/api/analyze-recitation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            transcribedText,
-            surahName: 'الفاتحة',
-            surahNumber: 1,
-            startVerse: 1,
-            endVerse: 7,
-          }),
-        });
-        
-        if (!analysisResponse.ok) {
-          const errorData = await analysisResponse.json().catch(() => ({}));
-          throw new Error(errorData.error || 'فشل التحليل');
-        }
-        
-        const analysisData = await analysisResponse.json();
-        
-        setAnalysisResults({
-          surah: 'سورة الفاتحة',
-          ayah: 'الآية 1-7',
-          duration: `${(audioBlob.size / 1024 / 1024).toFixed(2)} MB`,
-          transcribedText,
-          issues: analysisData.issues || [],
-          score: analysisData.score || 75,
-          feedback: analysisData.feedback || 'تم التحليل بنجاح',
-        });
-        
-        toast.success('تم تحليل التلاوة بنجاح!');
-      } catch (fetchError: any) {
-        clearTimeout(timeout);
-        if (fetchError.name === 'AbortError') {
-          throw new Error('انقطع الاتصال أو استغرقت العملية وقتاً طويلاً (أكثر من 60 ثانية)');
-        }
-        throw fetchError;
+      formData.append("audio", audioBlob, "recording.webm");
+      formData.append("surah", "الفاتحة");
+      formData.append("verses", "1-7");
+
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "فشل التحليل");
       }
-    } catch (error: any) {
-      console.error('خطأ في التحليل:', error);
-      const errorMsg = error.message || 'حدث خطأ في التحليل';
+
+      const data = await response.json();
+      setAnalysisResults(data);
+      toast.success("تم تحليل التلاوة بنجاح");
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "حدث خطأ أثناء التحليل";
+      setRecordingError(errorMsg);
       toast.error(errorMsg);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const downloadRecording = () => {
-    if (!audioBlob) return;
-    const url = URL.createObjectURL(audioBlob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "recitation.webm";
-    a.click();
-    URL.revokeObjectURL(url);
+  const resetDemo = () => {
+    setAudioBlob(null);
+    setAnalysisResults(null);
+    setDuration(0);
+    setRecordingError(null);
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* الهيدر */}
-      <header className="glass border-b border-border/50 sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-16">
-          <Link href="/">
-            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
-              <div className="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center glow-primary">
-                <Zap className="w-6 h-6 text-primary-foreground fill-current" />
-              </div>
-              <h1 className="text-xl font-bold">الماهر</h1>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 p-4 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <Link href="/" className="inline-flex items-center gap-2 text-emerald-400 hover:text-emerald-300 mb-4">
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            العودة للرئيسية
           </Link>
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="gap-2">
-              العودة للرئيسية
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">جرب التسجيل الآن</h1>
+          <p className="text-emerald-200">سجل تلاوتك لسورة الفاتحة ثم اضغط على "تحليل التلاوة" للحصول على تقييم ذكي</p>
         </div>
-      </header>
 
-      {/* المحتوى الرئيسي */}
-      <main className="container py-12">
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* قسم التسجيل */}
-          <div className="glass rounded-2xl p-8 border border-border/50">
-            <h2 className="text-2xl font-bold mb-6 text-center">جرب التسجيل الآن</h2>
-            
-            <div className="space-y-6">
-              {/* حالة التسجيل */}
-              <div className="flex justify-center">
-                <div className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
-                  isRecording 
-                    ? "gradient-primary glow-primary animate-pulse" 
-                    : "bg-secondary"
-                }`}>
-                  <Mic2 className="w-10 h-10 text-primary-foreground" />
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Recording Section */}
+          <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6 shadow-xl">
+            <h2 className="text-xl font-bold text-white mb-6">جرب التسجيل الآن</h2>
+
+            {recordingError && (
+              <div className="mb-4 p-4 bg-red-500/20 border border-red-500/50 rounded-lg flex gap-3">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-red-200 text-sm">{recordingError}</p>
+                  <p className="text-red-300 text-xs mt-1">💡 جرب تحميل ملف صوتي بدلاً من التسجيل المباشر</p>
                 </div>
               </div>
+            )}
 
-              {/* زر التسجيل/الإيقاف */}
-              <div className="flex gap-4 justify-center">
-                {!isRecording ? (
-                  <Button 
-                    onClick={startRecording}
-                    className="gap-2 gradient-primary glow-primary"
-                    size="lg"
-                  >
-                    <Mic2 className="w-5 h-5" />
-                    ابدأ التسجيل
-                  </Button>
-                ) : (
-                  <Button 
-                    onClick={stopRecording}
-                    variant="destructive"
-                    className="gap-2"
-                    size="lg"
-                  >
-                    <Square className="w-5 h-5" />
-                    إيقاف التسجيل
-                  </Button>
-                )}
-              </div>
-
-              {/* الأزرار الإضافية */}
-              {audioBlob && (
-                <div className="flex gap-4 justify-center flex-wrap">
-                  <Button 
-                    onClick={analyzeRecitation}
-                    disabled={isAnalyzing}
-                    className="gap-2 gradient-primary"
-                  >
-                    <Play className="w-4 h-4" />
-                    {isAnalyzing ? "جاري التحليل..." : "تحليل التلاوة"}
-                  </Button>
-                  <Button 
-                    onClick={downloadRecording}
+            {/* Recording Controls */}
+            <div className="space-y-4 mb-6">
+              {!audioBlob ? (
+                <>
+                  {!isRecording ? (
+                    <Button
+                      onClick={startRecording}
+                      className="w-full bg-emerald-500 hover:bg-emerald-600 text-white gap-2 py-6"
+                    >
+                      <Mic2 className="w-5 h-5" />
+                      ابدأ التسجيل
+                    </Button>
+                  ) : (
+                    <div className="space-y-3">
+                      <Button
+                        onClick={stopRecording}
+                        className="w-full bg-red-500 hover:bg-red-600 text-white gap-2 py-6"
+                      >
+                        <Square className="w-5 h-5" />
+                        إيقاف التسجيل
+                      </Button>
+                      <div className="text-center text-emerald-200 text-lg font-mono">
+                        {formatDuration(duration)}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-emerald-500/20 rounded-lg">
+                    <span className="text-emerald-200">ملف صوتي جاهز</span>
+                    <span className="text-emerald-400 text-sm">
+                      {audioBlob.size ? `${(audioBlob.size / 1024).toFixed(1)} KB` : ""}
+                    </span>
+                  </div>
+                  <Button
+                    onClick={resetDemo}
                     variant="outline"
-                    className="gap-2"
+                    className="w-full border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10"
                   >
-                    <Download className="w-4 h-4" />
-                    تحميل
+                    تسجيل جديد
                   </Button>
                 </div>
               )}
 
-              {/* رسالة التعليمات */}
-              <div className="bg-secondary/50 rounded-lg p-4 text-sm text-center text-muted-foreground">
-                <p>سجل تلاوتك لسورة الفاتحة ثم اضغط على "تحليل التلاوة" للحصول على تقييم فوري</p>
+              {/* File Upload Option */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/20"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-slate-900 text-white/60">أو</span>
+                </div>
               </div>
+
+              <AudioFileUpload
+                onFileSelected={handleFileSelected}
+                onError={(error) => {
+                  setRecordingError(error);
+                  toast.error(error);
+                }}
+              />
             </div>
+
+            {/* Analyze Button */}
+            {audioBlob && (
+              <Button
+                onClick={analyzeRecitation}
+                disabled={isAnalyzing}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white gap-2 py-6"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <div className="animate-spin">⚙️</div>
+                    جاري التحليل...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-5 h-5" />
+                    تحليل التلاوة
+                  </>
+                )}
+              </Button>
+            )}
           </div>
 
-          {/* قسم النتائج */}
-          <div className="glass rounded-2xl p-8 border border-border/50">
-            <h2 className="text-2xl font-bold mb-6 text-center">نتائج التحليل</h2>
-            
-            {analysisResults ? (
-              <div className="space-y-6">
-                {/* الدرجة */}
-                <div className="text-center">
-                  <div className="text-5xl font-bold gradient-text mb-2">
-                    {analysisResults.score}
-                  </div>
-                  <p className="text-muted-foreground">من 100</p>
-                </div>
+          {/* Results Section */}
+          <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-6 shadow-xl">
+            <h2 className="text-xl font-bold text-white mb-6">نتائج التحليل</h2>
 
-                {/* المعلومات */}
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">السورة:</span>
-                    <span className="font-semibold">{analysisResults.surah}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">الآيات:</span>
-                    <span className="font-semibold">{analysisResults.ayah}</span>
-                  </div>
-                </div>
-
-                {/* التقييم */}
-                <div className="bg-secondary/50 rounded-lg p-4">
-                  <h3 className="font-semibold mb-2">التقييم:</h3>
-                  <p className="text-sm text-muted-foreground">{analysisResults.feedback}</p>
-                </div>
-
-                {/* الملاحظات */}
-                {analysisResults.issues && analysisResults.issues.length > 0 && (
-                  <div className="bg-secondary/50 rounded-lg p-4">
-                    <h3 className="font-semibold mb-3">الملاحظات:</h3>
-                    <div className="space-y-2">
-                      {analysisResults.issues.map((issue: any, idx: number) => (
-                        <div key={idx} className="flex gap-2 text-sm">
-                          <span className={`font-semibold ${
-                            issue.type === 'error' ? 'text-red-500' :
-                            issue.type === 'warning' ? 'text-yellow-500' :
-                            'text-green-500'
-                          }`}>
-                            {issue.type === 'error' ? '❌' :
-                             issue.type === 'warning' ? '⚠️' :
-                             '✅'}
-                          </span>
-                          <span>{issue.text}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* زر التسجيل مرة أخرى */}
-                <Button 
-                  onClick={() => {
-                    setAudioBlob(null);
-                    setAnalysisResults(null);
-                  }}
-                  variant="outline"
-                  className="w-full"
-                >
-                  تسجيل جديد
-                </Button>
+            {!analysisResults ? (
+              <div className="flex flex-col items-center justify-center h-64 text-white/60">
+                <div className="text-4xl mb-4">📝</div>
+                <p>سجل تلاوتك ثم اضغط على "تحليل التلاوة" للحصول على النتائج</p>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-96 text-center">
-                <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
-                  <Mic2 className="w-8 h-8 text-muted-foreground" />
+              <div className="space-y-4">
+                {/* Transcription */}
+                <div>
+                  <h3 className="text-emerald-400 font-semibold mb-2">النص المحول:</h3>
+                  <p className="text-white/80 text-sm leading-relaxed bg-white/5 p-3 rounded">
+                    {analysisResults.transcription || "لم يتم تحويل الصوت"}
+                  </p>
                 </div>
-                <p className="text-muted-foreground">
-                  سجل تلاوة وحللها للحصول على النتائج
-                </p>
+
+                {/* Analysis */}
+                {analysisResults.analysis && (
+                  <>
+                    <div>
+                      <h3 className="text-emerald-400 font-semibold mb-2">التقييم:</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-white/70">الدقة الإجمالية:</span>
+                          <span className="text-emerald-400 font-bold">
+                            {analysisResults.analysis.overallScore || 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-2">
+                          <div
+                            className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 rounded-full"
+                            style={{
+                              width: `${analysisResults.analysis.overallScore || 0}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {analysisResults.analysis.errors && (
+                      <div>
+                        <h3 className="text-amber-400 font-semibold mb-2">الملاحظات:</h3>
+                        <ul className="text-white/70 text-sm space-y-1">
+                          {analysisResults.analysis.errors.map((error: string, idx: number) => (
+                            <li key={idx} className="flex gap-2">
+                              <span className="text-amber-400">•</span>
+                              <span>{error}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {analysisResults.analysis.suggestions && (
+                      <div>
+                        <h3 className="text-blue-400 font-semibold mb-2">التوصيات:</h3>
+                        <ul className="text-white/70 text-sm space-y-1">
+                          {analysisResults.analysis.suggestions.map((suggestion: string, idx: number) => (
+                            <li key={idx} className="flex gap-2">
+                              <span className="text-blue-400">✓</span>
+                              <span>{suggestion}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* CTA */}
+                <div className="mt-6 pt-4 border-t border-white/10">
+                  <p className="text-white/60 text-sm mb-3">هل أعجبك التقييم؟</p>
+                  <Link href={getLoginUrl()}>
+                    <Button className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white">
+                      سجل الآن واستمتع بجميع المميزات
+                    </Button>
+                  </Link>
+                </div>
               </div>
             )}
           </div>
         </div>
-
-        {/* زر التسجيل الآن */}
-        <div className="mt-12 text-center">
-          <Link href={getLoginUrl()}>
-            <Button size="lg" className="gap-2 gradient-primary glow-primary">
-              سجل الآن واستمتع بجميع المميزات
-              <ArrowRight className="w-5 h-5" />
-            </Button>
-          </Link>
-        </div>
-      </main>
+      </div>
     </div>
   );
 }
