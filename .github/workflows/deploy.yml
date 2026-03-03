@@ -1,4 +1,4 @@
-name: Build and Deploy to GitHub Pages
+name: Build and Deploy
 
 on:
   push:
@@ -9,14 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
       with:
-        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Use Node.js 22.x
-      uses: actions/setup-node@v3
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
       with:
-        node-version: 22.x
+        node-version: '22'
     
     - name: Install pnpm
       run: npm install -g pnpm
@@ -24,10 +25,10 @@ jobs:
     - name: Install dependencies
       run: pnpm install
     
-    - name: Build the application
+    - name: Build
       run: pnpm build
     
-    - name: Deploy to GitHub Pages
+    - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
